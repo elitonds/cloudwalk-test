@@ -15,11 +15,17 @@ export class AppService {
     });
 
     const gameDetailList = new Map<string, GameDetailResults>();
+    const playerDetail = new Map<string, Map<string, number>>();
     let gameNumber = 0;
     let currentGame = '';
 
     for await (const line of rl) {
       if (line.includes('InitGame')) {
+        if (gameDetailList.size && gameDetailList.get(currentGame).totalKills) {
+          gameDetailList.get(currentGame).kills = [
+            ...playerDetail.get(currentGame).entries(),
+          ];
+        }
         gameNumber++;
         currentGame = `game_${gameNumber}`;
         const gameDetail: GameDetailResults = {
@@ -28,12 +34,43 @@ export class AppService {
           totalKills: 0,
         };
         gameDetailList.set(currentGame, gameDetail);
+        playerDetail.set(currentGame, new Map());
+      } else {
+        this.processLine(
+          line,
+          gameDetailList.get(currentGame),
+          playerDetail.get(currentGame),
+        );
       }
     }
     return [...gameDetailList.entries()];
   }
 
-  // private processLine(line: string, gameDetail: GameDetailResults) {
+  private processLine(
+    line: string,
+    gameDetail: GameDetailResults,
+    playerDetail: Map<string, number>,
+  ) {
+    if (line.includes('Kill:')) {
+      gameDetail.totalKills++;
+      const slicesLine = line.split(':');
+      const killInfo = slicesLine.find((a) => a.includes(' killed '));
+      if (killInfo) {
+        const detailsKill = killInfo.split(' killed ') || [];
+        detailsKill.forEach((detail) => {
+          const cleanDetail = detail.trim();
+          if (cleanDetail !== '<world>') {
+            if (cleanDetail.includes(' by ')) {
+              const detailsBy = cleanDetail.split(' by ') || [];
+              if (detailsBy.length) this.setPlayer(detailsBy[0], playerDetail);
+            } else this.setPlayer(cleanDetail, playerDetail);
+          }
+        });
+      }
+    }
+  }
 
-  // }
+  private setPlayer(playerName: string, kills: Map<string, number>) {
+    if (!kills.get(playerName)) kills.set(playerName, 0);
+  }
 }
